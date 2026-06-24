@@ -1,13 +1,12 @@
-
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 import json
 import os
 import logging
 from datetime import datetime, timedelta
-from slotmap import RAW_SLOT_COMBINATIONS  
+from slotmap import RAW_SLOT_COMBINATIONS
 
-# --- логи ---
+# --- ЛОГИ ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -16,57 +15,57 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- настройки бота ---
-import os
-BOT_TOKEN = os.environ.get("BOT_TOKEN")  
+# --- НАСТРОЙКИ БОТА ---
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 START_BALANCE = 500
 SPIN_COST = 50
 
 # --- МНОЖИТЕЛИ ---
-
 SYMBOL_MULTIPLIERS = {
-    "seven": 5,    
-    "bar": 4,     
-    "lemon": 3,    
-    "cherry": 2   
+    "seven": 5,
+    "bar": 4,
+    "lemon": 3,
+    "cherry": 2
 }
 
-# Множители для джекпота 
 JACKPOT_MULTIPLIERS = {
-    "seven": 5,    
-    "bar": 4,      
-    "lemon": 3,    
-    "cherry": 2   
+    "seven": 5,
+    "bar": 4,
+    "lemon": 3,
+    "cherry": 2
 }
 
 COOLDOWN_SECONDS = 5
 
-# Пути к файлам данных
+# --- ПУТИ К ФАЙЛАМ ДАННЫХ ---
 BALANCES_FILE = "balances.json"
 STATS_FILE = "stats.json"
 DODEP_FILE = "dodep_usage.json"
 
-# --- Загрузка и сохранение файлов ---
+# --- ЗАГРУЗКА И СОХРАНЕНИЕ ФАЙЛОВ (С ПРОВЕРКОЙ НА ПУСТЫЕ ФАЙЛЫ) ---
 def load_json_file(filename, default={}):
     if os.path.exists(filename):
-        with open(filename, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            return default
     return default
 
 def save_json_file(filename, data):
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# Загружаем данные
+# --- ЗАГРУЖАЕМ ДАННЫЕ ---
 balances = load_json_file(BALANCES_FILE, {})
 stats = load_json_file(STATS_FILE, {"spins": {}, "losses": {}, "wins": {}})
 dodep_usage = load_json_file(DODEP_FILE, {})
 
-# --- создание бота ---
+# --- СОЗДАЁМ БОТА ---
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# --- получение имени пользователя ---
+# --- ПОЛУЧЕНИЕ ИМЕНИ ПОЛЬЗОВАТЕЛЯ ---
 async def get_username(user_id):
     try:
         user = await bot.get_chat(user_id)
@@ -74,7 +73,7 @@ async def get_username(user_id):
     except:
         return f"User {user_id}"
 
-# --- /start ---
+# --- КОМАНДА /start ---
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     user_id = str(message.from_user.id)
@@ -94,10 +93,10 @@ async def start_command(message: types.Message):
         f"🎰 Добро пожаловать в Slot Bot, {username}!\n"
         f"💰 Ваш баланс: {balances[user_id]} монет.\n"
         f"🎲 Стоимость рола: {SPIN_COST} монет.\n\n"
-        f"Отправьте стикер 🎰, чтобы крутить слот!",
+        f"Отправьте стикер 🎰, чтобы крутить слот!"
     )
 
-# --- /balance ---
+# --- КОМАНДА /balance ---
 @dp.message(Command("balance"))
 async def balance_command(message: types.Message):
     user_id = str(message.from_user.id)
@@ -105,7 +104,7 @@ async def balance_command(message: types.Message):
     logger.info(f"Пользователь {user_id} запросил баланс: {balance}")
     await message.answer(f"💰 Ваш баланс: {balance} монет.")
 
-# --- /dodep ---
+# --- КОМАНДА /dodep ---
 @dp.message(Command("dodep"))
 async def dodep_command(message: types.Message):
     user_id = str(message.from_user.id)
@@ -143,7 +142,7 @@ async def dodep_command(message: types.Message):
 
     await message.answer("💸 Выберите способ пополнения:", reply_markup=keyboard)
 
-# --- обработка кнопок DODEP ---
+# --- ОБРАБОТКА КНОПОК DODEP ---
 @dp.callback_query(lambda c: c.data.startswith("dodep_"))
 async def process_dodep(callback_query: types.CallbackQuery):
     user_id = str(callback_query.from_user.id)
@@ -169,38 +168,48 @@ async def process_dodep(callback_query: types.CallbackQuery):
 
     username = await get_username(user_id)
     await callback_query.message.edit_text(
-        f"✅ Успех, {username}! +{amount} монет.\n💰 Баланс: {balances[user_id]}",
+        f"✅ Успех, {username}! +{amount} монет.\n💰 Баланс: {balances[user_id]}"
     )
 
-# --- /top ---
+# --- КОМАНДА /top (ИСПРАВЛЕНО: УБРАНЫ ** И ДОБАВЛЕНА ПРОВЕРКА НА ПУСТЫЕ ДАННЫЕ) ---
 @dp.message(Command("top"))
 async def top_command(message: types.Message):
     username = await get_username(str(message.from_user.id))
     logger.info(f"Пользователь {message.from_user.id} запросил /top")
 
+    # 1. Топ по балансу
     richest = sorted(balances.items(), key=lambda x: x[1], reverse=True)[:10]
-    richest_text = "**🏆 Самый богатый Лудик:**\n"
-    for i, (user_id, balance) in enumerate(richest, 1):
-        user_name = await get_username(user_id)
-        richest_text += f"{i}. {user_name}: {balance} монет\n"
+    richest_text = "🏆 Самый богатый Лудик:\n"
+    if richest:
+        for i, (user_id, balance) in enumerate(richest, 1):
+            user_name = await get_username(user_id)
+            richest_text += f"{i}. {user_name}: {balance} монет\n"
+    else:
+        richest_text += "Пока нет пользователей.\n"
 
+    # 2. Топ по прокрутам
     spins = sorted(stats["spins"].items(), key=lambda x: x[1], reverse=True)[:10]
-    spins_text = "\n**🎰 Казино - моя жизнь:**\n"
-    for i, (user_id, count) in enumerate(spins, 1):
-        user_name = await get_username(user_id)
-        spins_text += f"{i}. {user_name}: {count} прокрутов\n"
+    spins_text = "\n🎰 Казино - моя жизнь:\n"
+    if spins:
+        for i, (user_id, count) in enumerate(spins, 1):
+            user_name = await get_username(user_id)
+            spins_text += f"{i}. {user_name}: {count} прокрутов\n"
+    else:
+        spins_text += "Пока нет прокрутов.\n"
 
+    # 3. Топ по проигрышам
     losses = sorted(stats["losses"].items(), key=lambda x: x[1], reverse=True)[:10]
-    losses_text = "\n**😢 Жизнь в нищете:**\n"
-    for i, (user_id, amount) in enumerate(losses, 1):
-        user_name = await get_username(user_id)
-        losses_text += f"{i}. {user_name}: -{amount} монет\n"
+    losses_text = "\n😢 Жизнь в нищете:\n"
+    if losses:
+        for i, (user_id, amount) in enumerate(losses, 1):
+            user_name = await get_username(user_id)
+            losses_text += f"{i}. {user_name}: -{amount} монет\n"
+    else:
+        losses_text += "Пока нет проигрышей.\n"
 
-    await message.answer(
-        f"{username}, вот текущие топы:\n\n{richest_text}{spins_text}{losses_text}",
-    )
+    await message.answer(f"{username}, вот текущие топы:\n\n{richest_text}{spins_text}{losses_text}")
 
-# --- обработка эмодзи (Dice) ---
+# --- ОБРАБОТКА СТИКЕРОВ (Dice) ---
 cooldowns = {}
 
 @dp.message(lambda message: message.dice is not None)
@@ -216,7 +225,7 @@ async def handle_dice(message: types.Message):
         logger.warning(f"Игнорируем dice с emoji={dice_emoji}")
         return
 
-    # кулдаун
+    # Кулдаун
     now = datetime.now()
     if user_id in cooldowns:
         last_spin = cooldowns[user_id]
@@ -227,7 +236,7 @@ async def handle_dice(message: types.Message):
             return
     cooldowns[user_id] = now
 
-    # проверка баланса
+    # Проверка баланса
     if user_id not in balances:
         balances[user_id] = START_BALANCE
         stats["spins"][user_id] = 0
@@ -239,28 +248,27 @@ async def handle_dice(message: types.Message):
         logger.warning(f"Пользователь {user_id} недостаточно средств: баланс={balances[user_id]}, нужно={SPIN_COST}")
         await message.answer(
             f"❌ {username}, недостаточно средств!\n💰 Ваш баланс: {balances[user_id]} монет.\n\n"
-            f"Можно пополнить через /dodep",
+            f"Можно пополнить через /dodep"
         )
         return
 
-    # стоимость ролла
+    # Стоимость ролла
     old_balance = balances[user_id]
     balances[user_id] -= SPIN_COST
     stats["spins"][user_id] = stats["spins"].get(user_id, 0) + 1
     logger.info(f"Пользователь {user_id}: списание {SPIN_COST} монет. Баланс: {old_balance} -> {balances[user_id]}")
 
-    # --- ПОЛУЧАЕМ КОМБИНАЦИЮ ИЗ RAW_SLOT_COMBINATIONS ---
+    # Комбинация из RAW_SLOT_COMBINATIONS
     combination = RAW_SLOT_COMBINATIONS[str(dice_value)]
     logger.info(f"Комбинация для value={dice_value}: {combination}")
 
-    # проверка 3 символа
     if len(combination) != 3:
         logger.error(f"Некорректная длина комбинации: {len(combination)} символов. Дополняем до 3.")
         while len(combination) < 3:
             combination.append("cherry")
         logger.warning(f"Дополнена комбинация: {combination}")
 
-    # --- выйгрыш/проигрыш ---
+    # Логика выигрыша/проигрыша
     unique_symbols = set(combination)
     logger.info(f"Уникальные символы: {unique_symbols}, количество: {len(unique_symbols)}")
 
@@ -268,13 +276,11 @@ async def handle_dice(message: types.Message):
     message_text = f"⚠️ {username}, что-то пошло не так."
 
     if len(unique_symbols) == 3:
-        # Все символы разные → ПРОИГРЫШ
         stats["losses"][user_id] = stats["losses"].get(user_id, 0) + SPIN_COST
         message_text = f"😢 {username}, вы проиграли -{SPIN_COST} монет.\n💰 Ваш баланс: {balances[user_id]}"
         logger.info(f"Пользователь {user_id}: ПРОИГРЫШ. Баланс: {balances[user_id]}")
 
     elif len(unique_symbols) == 2:
-        # 2 одинаковых символа → ВЫИГРЫШ (умножаем на множитель символа)
         for symbol in unique_symbols:
             if combination.count(symbol) == 2:
                 multiplier = SYMBOL_MULTIPLIERS.get(symbol, 1)
@@ -287,10 +293,9 @@ async def handle_dice(message: types.Message):
                 break
 
     elif len(unique_symbols) == 1:
-        # 3 одинаковых символа → ДЖЕКПОТ (умножаем на множитель в квадрате)
         symbol = combination[0]
         multiplier = JACKPOT_MULTIPLIERS.get(symbol, 1)
-        win_amount = SPIN_COST * (multiplier ** 2)  # Множитель в квадрате
+        win_amount = SPIN_COST * (multiplier ** 2)
         balances[user_id] += win_amount
         stats["wins"][user_id] = stats["wins"].get(user_id, 0) + win_amount
         message_text = f"🎉 {username}, ДЖЕКПОТ! +{win_amount} монет!\n💰 Ваш баланс: {balances[user_id]}"
@@ -304,7 +309,6 @@ async def handle_dice(message: types.Message):
     await message.answer(message_text)
     logger.info(f"Отправлено сообщение пользователю {user_id}: {message_text}")
 
-    # Сохраняем данные
     save_json_file(BALANCES_FILE, balances)
     save_json_file(STATS_FILE, stats)
 
