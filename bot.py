@@ -95,7 +95,6 @@ async def start_command(message: types.Message):
         f"💰 Ваш баланс: {balances[user_id]} монет.\n"
         f"🎲 Стоимость рола: {SPIN_COST} монет.\n\n"
         f"Отправьте стикер 🎰, чтобы крутить слот!",
-        parse_mode="Markdown"
     )
 
 # --- /balance ---
@@ -104,7 +103,7 @@ async def balance_command(message: types.Message):
     user_id = str(message.from_user.id)
     balance = balances.get(user_id, 0)
     logger.info(f"Пользователь {user_id} запросил баланс: {balance}")
-    await message.answer(f"💰 Ваш баланс: {balance} монет.", parse_mode="Markdown")
+    await message.answer(f"💰 Ваш баланс: {balance} монет.")
 
 # --- /dodep ---
 @dp.message(Command("dodep"))
@@ -123,7 +122,7 @@ async def dodep_command(message: types.Message):
 
     if phone_used and house_used and kidney_used:
         logger.warning(f"Пользователь {user_id} уже использовал все dodep сегодня")
-        await message.answer("❌ Вы уже использовали все варианты dodep сегодня!", parse_mode="Markdown")
+        await message.answer("❌ Вы уже использовали все варианты dodep сегодня!")
         return
 
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -142,7 +141,7 @@ async def dodep_command(message: types.Message):
             InlineKeyboardButton(text=f"🏥 Продать почку (+{SPIN_COST * 6} монет)", callback_data="dodep_kidney")
         )
 
-    await message.answer("💸 Выберите способ пополнения:", reply_markup=keyboard, parse_mode="Markdown")
+    await message.answer("💸 Выберите способ пополнения:", reply_markup=keyboard)
 
 # --- обработка кнопок DODEP ---
 @dp.callback_query(lambda c: c.data.startswith("dodep_"))
@@ -171,7 +170,6 @@ async def process_dodep(callback_query: types.CallbackQuery):
     username = await get_username(user_id)
     await callback_query.message.edit_text(
         f"✅ Успех, {username}! +{amount} монет.\n💰 Баланс: {balances[user_id]}",
-        parse_mode="Markdown"
     )
 
 # --- /top ---
@@ -200,7 +198,6 @@ async def top_command(message: types.Message):
 
     await message.answer(
         f"{username}, вот текущие топы:\n\n{richest_text}{spins_text}{losses_text}",
-        parse_mode="Markdown"
     )
 
 # --- обработка эмодзи (Dice) ---
@@ -226,7 +223,7 @@ async def handle_dice(message: types.Message):
         if now - last_spin < timedelta(seconds=COOLDOWN_SECONDS):
             remaining = (last_spin + timedelta(seconds=COOLDOWN_SECONDS) - now).seconds
             logger.info(f"Пользователь {user_id} на кулдауне: {remaining}с")
-            await message.answer(f"⏳ {username}, подождите ещё {remaining} секунд!", parse_mode="Markdown")
+            await message.answer(f"⏳ {username}, подождите ещё {remaining} секунд!")
             return
     cooldowns[user_id] = now
 
@@ -243,7 +240,6 @@ async def handle_dice(message: types.Message):
         await message.answer(
             f"❌ {username}, недостаточно средств!\n💰 Ваш баланс: {balances[user_id]} монет.\n\n"
             f"Можно пополнить через /dodep",
-            parse_mode="Markdown"
         )
         return
 
@@ -305,7 +301,7 @@ async def handle_dice(message: types.Message):
         message_text = f"⚠️ {username}, ошибка в комбинации. Баланс возвращён."
         balances[user_id] += SPIN_COST
 
-    await message.answer(message_text, parse_mode="Markdown")
+    await message.answer(message_text)
     logger.info(f"Отправлено сообщение пользователю {user_id}: {message_text}")
 
     # Сохраняем данные
